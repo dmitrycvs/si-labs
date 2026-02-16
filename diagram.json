@@ -3,20 +3,325 @@
   "author": "Anonymous maker",
   "editor": "wokwi",
   "parts": [
-    { "type": "wokwi-arduino-uno", "id": "uno", "top": 39, "left": -10.2, "attrs": {} },
-    { "type": "wokwi-led", "id": "led1", "top": -90, "left": 80.6, "attrs": { "color": "red" } },
+    {
+      "type": "wokwi-breadboard-half",
+      "id": "bb1",
+      "top": -12.6,
+      "left": -227.6,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-arduino-uno",
+      "id": "uno",
+      "top": 19.8,
+      "left": 181.8,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": -90,
+      "left": -130.6,
+      "attrs": {
+        "color": "green"
+      }
+    },
+    {
+      "type": "wokwi-membrane-keypad",
+      "id": "keypad1",
+      "top": -395.6,
+      "left": 197.6,
+      "attrs": {}
+    },
     {
       "type": "wokwi-resistor",
       "id": "r1",
-      "top": -24.85,
-      "left": 0,
-      "attrs": { "value": "1000" }
+      "top": 157.9,
+      "left": -289.05,
+      "rotate": 90,
+      "attrs": {
+        "value": "1000"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led2",
+      "top": -99.6,
+      "left": -188.2,
+      "attrs": {
+        "color": "red"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": 244.3,
+      "left": -250.65,
+      "rotate": 90,
+      "attrs": {
+        "value": "1000"
+      }
+    },
+    {
+      "type": "wokwi-lcd1602",
+      "id": "lcd1",
+      "top": 332.8,
+      "left": -52,
+      "attrs": {
+        "pins": "i2c"
+      }
     }
   ],
   "connections": [
-    [ "led1:C", "r1:2", "green", [ "v0" ] ],
-    [ "led1:A", "uno:13", "green", [ "v0" ] ],
-    [ "r1:1", "uno:GND.1", "green", [ "v0" ] ]
+    [
+      "uno:GND.1",
+      "bb1:bn.1",
+      "black",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "uno:1",
+      "bb1:30b.j",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "uno:2",
+      "bb1:29b.j",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "uno:3",
+      "bb1:28b.j",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "uno:4",
+      "bb1:27b.j",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:30b.i",
+      "keypad1:C4",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:29b.i",
+      "keypad1:C3",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:28b.i",
+      "keypad1:C2",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:27b.i",
+      "keypad1:C1",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "uno:5",
+      "bb1:26b.j",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "uno:6",
+      "bb1:25b.j",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "uno:7",
+      "bb1:24b.j",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "uno:8",
+      "bb1:23b.j",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:26b.i",
+      "keypad1:R4",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:25b.i",
+      "keypad1:R3",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:24b.i",
+      "keypad1:R2",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:23b.i",
+      "keypad1:R1",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "r1:2",
+      "bb1:bn.3",
+      "green",
+      [
+        "h0"
+      ]
+    ],
+    [
+      "r1:1",
+      "bb1:5b.j",
+      "green",
+      [
+        "h0"
+      ]
+    ],
+    [
+      "led2:C",
+      "bb1:5b.i",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "led2:A",
+      "bb1:7b.i",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "r2:2",
+      "bb1:bn.7",
+      "green",
+      [
+        "h86.4",
+        "v-58.8"
+      ]
+    ],
+    [
+      "r2:1",
+      "bb1:9b.j",
+      "green",
+      [
+        "h0"
+      ]
+    ],
+    [
+      "led1:C",
+      "bb1:9b.i",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "led1:A",
+      "bb1:13b.i",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:7b.j",
+      "uno:13",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "bb1:13b.j",
+      "uno:12",
+      "green",
+      [
+        "v0"
+      ]
+    ],
+    [
+      "lcd1:GND",
+      "uno:GND.2",
+      "black",
+      [
+        "h0"
+      ]
+    ],
+    [
+      "lcd1:VCC",
+      "uno:5V",
+      "red",
+      [
+        "h0"
+      ]
+    ],
+    [
+      "lcd1:SDA",
+      "uno:A4",
+      "green",
+      [
+        "h0"
+      ]
+    ],
+    [
+      "lcd1:SCL",
+      "uno:A5",
+      "green",
+      [
+        "h0"
+      ]
+    ]
   ],
   "dependencies": {}
 }

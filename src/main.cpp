@@ -1,13 +1,25 @@
 #include <Arduino.h>
 #include <stdio.h>
 #include "Led.h"
+#include "Lcd.h"
+#include "KeypadWrapper.h"
 
-const uint8_t LED_PIN = 13;
+// Pin Configuration
+const uint8_t GREEN_LED_PIN = 12;
+const uint8_t RED_LED_PIN = 13;
 const uint32_t SERIAL_BAUD_RATE = 9600;
-const uint8_t COMMAND_BUFFER_SIZE = 32;
 
-char commandBuffer[COMMAND_BUFFER_SIZE];
-uint8_t bufferIndex = 0;
+// Code Configuration
+const char VALID_CODE[] = "1234";
+const uint8_t MAX_CODE_LENGTH = 6;
+const uint16_t DISPLAY_DELAY_MS = 2000;
+
+// State Variables
+char enteredCode[MAX_CODE_LENGTH + 1];
+uint8_t codeIndex = 0;
+
+// STDIO Stream Setup
+FILE serialStream;
 
 int serialPutChar(char c, FILE *stream)
 {
@@ -22,43 +34,115 @@ int serialGetChar(FILE *stream)
   return Serial.read();
 }
 
-FILE serialStream;
-
-void ProcessCommand(const char *command)
+void DisplayWelcomeMessage()
 {
-  char trimmedCommand[COMMAND_BUFFER_SIZE];
-  int len = strlen(command);
-  int i;
+  LcdClear();
+  LcdPrintAt(0, 0, "Enter Code:");
+  LcdPrintAt(0, 1, "");
 
-  for (i = 0; i < len && command[i] != '\0'; i++)
-  {
-    trimmedCommand[i] = command[i];
-  }
-  trimmedCommand[i] = '\0';
+  printf("========================================\n");
+  printf("Lab 1.2 - Code Validation System\n");
+  printf("========================================\n");
+  printf("STDIO Library - LCD + Keypad Interface\n");
+  printf("Instructions:\n");
+  printf("  - Enter 4-digit code on keypad\n");
+  printf("  - Press # to submit code\n");
+  printf("  - Press * to clear entry\n");
+  printf("========================================\n");
+  printf("System ready. Waiting for input...\n");
+}
 
-  while (i > 0 && (trimmedCommand[i - 1] == '\n' || trimmedCommand[i - 1] == '\r' || trimmedCommand[i - 1] == ' '))
+void ValidateCode()
+{
+  enteredCode[codeIndex] = '\0';
+
+  printf("Code entered: %s\n", enteredCode);
+
+  if (strcmp(enteredCode, VALID_CODE) == 0)
   {
-    trimmedCommand[--i] = '\0';
+    printf("Code VALID - Access Granted!\n");
+
+    LcdClear();
+    LcdPrintAt(0, 0, "Access Granted!");
+    LcdPrintAt(0, 1, "Welcome!");
+
+    LedOn(GREEN_LED_PIN);
+    LedOff(RED_LED_PIN);
+  }
+  else
+  {
+    printf("Code INVALID - Access Denied!\n");
+
+    LcdClear();
+    LcdPrintAt(0, 0, "Access Denied!");
+    LcdPrintAt(0, 1, "Try Again");
+
+    LedOn(RED_LED_PIN);
+    LedOff(GREEN_LED_PIN);
   }
 
-  if (strcmp(trimmedCommand, "led on") == 0)
+  delay(DISPLAY_DELAY_MS);
+
+  LedOff(GREEN_LED_PIN);
+  LedOff(RED_LED_PIN);
+
+  codeIndex = 0;
+  memset(enteredCode, 0, MAX_CODE_LENGTH + 1);
+
+  DisplayWelcomeMessage();
+}
+
+void ClearEntry()
+{
+  printf("Entry cleared\n");
+
+  codeIndex = 0;
+  memset(enteredCode, 0, MAX_CODE_LENGTH + 1);
+
+  LcdClear();
+  LcdPrintAt(0, 0, "Enter Code:");
+  LcdPrintAt(0, 1, "");
+}
+
+void ProcessKeyPress(char key)
+{
+  if (key == '#')
   {
-    LedOn(LED_PIN);
-    printf("OK: LED turned ON\n");
-    printf("LED state: ON\n");
+    printf("Submit key pressed\n");
+
+    if (codeIndex > 0)
+    {
+      ValidateCode();
+    }
+    else
+    {
+      printf("No code entered\n");
+      LcdClear();
+      LcdPrintAt(0, 0, "No Code Entered!");
+      delay(1000);
+      DisplayWelcomeMessage();
+    }
   }
-  else if (strcmp(trimmedCommand, "led off") == 0)
+  else if (key == '*')
   {
-    LedOff(LED_PIN);
-    printf("OK: LED turned OFF\n");
-    printf("LED state: OFF\n");
+    ClearEntry();
   }
-  else if (strlen(trimmedCommand) > 0)
+  else if (codeIndex < MAX_CODE_LENGTH)
   {
-    printf("ERROR: Unknown command '%s'\n", trimmedCommand);
-    printf("Available commands:\n");
-    printf("  - led on\n");
-    printf("  - led off\n");
+    enteredCode[codeIndex++] = key;
+
+    printf("Key pressed: %c\n", key);
+
+    LcdSetCursor(codeIndex - 1, 1);
+    LcdPrint("*");
+
+    char buffer[20];
+    snprintf(buffer, sizeof(buffer), "Entered: %s", enteredCode);
+    printf("%s\n", buffer);
+  }
+  else
+  {
+    printf("Max code length reached\n");
   }
 }
 
@@ -70,52 +154,24 @@ void setup()
   stdout = &serialStream;
   stdin = &serialStream;
 
-  LedInit(LED_PIN);
+  LedInit(GREEN_LED_PIN);
+  LedInit(RED_LED_PIN);
 
-  printf("\n========================================\n");
-  printf("Lab 1.1 - LED Control via Serial\n");
-  printf("========================================\n");
-  printf("STDIO Library - Serial Interface\n");
-  printf("Commands:\n");
-  printf("  - led on  : Turn LED ON\n");
-  printf("  - led off : Turn LED OFF\n");
-  printf("========================================\n");
-  printf("Ready. Enter command:\n> ");
+  LcdInit();
+  KeypadInit();
 
-  bufferIndex = 0;
-  memset(commandBuffer, 0, COMMAND_BUFFER_SIZE);
+  memset(enteredCode, 0, MAX_CODE_LENGTH + 1);
+  codeIndex = 0;
+
+  DisplayWelcomeMessage();
 }
 
 void loop()
 {
-  if (Serial.available() > 0)
+  char key = KeypadGetKey();
+
+  if (key != NO_KEY_PRESSED)
   {
-    char receivedChar = Serial.read();
-
-    Serial.print(receivedChar);
-
-    if (receivedChar == '\n' || receivedChar == '\r')
-    {
-      if (bufferIndex > 0)
-      {
-        commandBuffer[bufferIndex] = '\0';
-        ProcessCommand(commandBuffer);
-        printf("> ");
-
-        bufferIndex = 0;
-        memset(commandBuffer, 0, COMMAND_BUFFER_SIZE);
-      }
-    }
-    else if (bufferIndex < COMMAND_BUFFER_SIZE - 1)
-    {
-      commandBuffer[bufferIndex++] = receivedChar;
-    }
-    else
-    {
-      printf("\nERROR: Command too long. Max %d characters.\n", COMMAND_BUFFER_SIZE - 1);
-      printf("> ");
-      bufferIndex = 0;
-      memset(commandBuffer, 0, COMMAND_BUFFER_SIZE);
-    }
+    ProcessKeyPress(key);
   }
 }
