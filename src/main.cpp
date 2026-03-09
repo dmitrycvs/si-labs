@@ -1,27 +1,32 @@
 #include <Arduino.h>
-#include <stdio.h>
-#include <string.h>
-#include "../lib/IO/IO.h"
-#include "../lib/LedDriver/LedController.h"
-#include "../lib/Scheduler/Scheduler.h"
-#include "../lib/Tasks/Tasks.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+#include "config.h"
+#include "tasks/task_measure.h"
+#include "tasks/task_stats.h"
+#include "tasks/task_report.h"
 
-void setup()
-{
-    // redirect stdio to serial
-    IO::setup();
+// semaphore and mutex handles
+static SemaphoreHandle_t PressSemaphore = nullptr;
+static SemaphoreHandle_t StatsMutex = nullptr;
 
-    // initialize tasks
-    tasksInit();
+void setup() {
+  // semaphore for button press event
+  PressSemaphore = xSemaphoreCreateBinary();
 
-    // start scheduler (1ms system tick)
-    Scheduler::getInstance().begin();
+  // mutex for stats
+  StatsMutex = xSemaphoreCreateMutex();
 
-    printf("Ready\n");
+  // tasks
+  vTaskMeasureCreate(PressSemaphore, StatsMutex);
+  vTaskStatsCreate(PressSemaphore, StatsMutex);
+  vTaskReportCreate(StatsMutex);
+
+  // start scheduler
+  vTaskStartScheduler();
 }
 
-void loop()
-{
-    // run non-preemptive scheduler
-    Scheduler::getInstance().run();
+void loop() {
+
 }
