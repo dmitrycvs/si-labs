@@ -9,13 +9,14 @@
 // Raw sensor data shared between tasks (protected by xDataMutex)
 typedef struct
 {
-  float fRawTemperature; // latest raw reading from DS18B20 in °C
-  bool  xSensorValid;    // true if sensor is connected and reading is valid
+  uint16_t usRawAdc;          // raw 12-bit ADC value (0-4095)
+  float    fRawTemperature;   // temperature converted via Beta equation (°C)
+  bool     xSensorValid;      // false when ADC is railed (0 or 4095)
 } SensorReading_t;
 
 extern SensorReading_t SensorData;
 
-// Returns the latest raw temperature value (thread-safe getter)
+// Thread-safe getter — returns latest raw temperature in °C
 float sensor_read();
 
 // Create the sensor acquisition task

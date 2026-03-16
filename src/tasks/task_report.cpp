@@ -23,35 +23,48 @@ static void prvTaskReport(void *pvParameters)
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(TASK_REPORT_PERIOD_MS));
 
     // Snapshot all shared data atomically
-    float   fTemp      = 0.0f;
-    bool    xValid     = false;
-    bool    xAlert     = false;
-    bool    xRawCond   = false;
-    uint8_t ucDebounce = 0;
+    uint16_t usAdc       = 0;
+    float    fRaw        = 0.0f;
+    bool     xValid      = false;
+    float    fSaturated  = 0.0f;
+    float    fMedian     = 0.0f;
+    float    fFiltered   = 0.0f;
+    bool     xAlertHigh  = false;
+    bool     xAlertLow   = false;
 
     if (xSemaphoreTake(s_xDataMutex, pdMS_TO_TICKS(50)) == pdTRUE)
     {
-      fTemp      = SensorData.fRawTemperature;
+      usAdc      = SensorData.usRawAdc;
+      fRaw       = SensorData.fRawTemperature;
       xValid     = SensorData.xSensorValid;
-      xAlert     = Alert.xAlertActive;
-      xRawCond   = Alert.xRawCondition;
-      ucDebounce = Alert.ucDebounceCount;
+      fSaturated = Processed.fSaturatedTemp;
+      fMedian    = Processed.fMedianTemp;
+      fFiltered  = Processed.fFilteredTemp;
+      xAlertHigh = Processed.xAlertHigh;
+      xAlertLow  = Processed.xAlertLow;
       xSemaphoreGive(s_xDataMutex);
     }
 
-    // --- Serial / STDIO report ---
+    // --- Serial / STDIO structured report ---
     printf("=== Temperature Report ===\n");
     if (xValid)
     {
-      printf("Raw temp  : %.2f C\n", fTemp);
-      printf("Threshold : H=%.1f C  L=%.1f C\n", THRESHOLD_HIGH_C, THRESHOLD_LOW_C);
-      printf("Raw cond  : %s threshold (pre-debounce)\n", xRawCond ? "ABOVE" : "BELOW");
-      printf("Debounce  : %u / %u samples\n", ucDebounce, DEBOUNCE_COUNT);
-      printf("State     : %s\n", xAlert ? "** ALERT **" : "NORMAL");
+      printf("ADC raw   : %u\n", usAdc);
+      printf("Raw temp  : %.2f C\n", fRaw);
+      printf("Saturated : %.2f C  [%.0f .. %.0f]\n", fSaturated, TEMP_SAT_MIN_C, TEMP_SAT_MAX_C);
+      printf("Median    : %.2f C  (window %d)\n", fMedian, MEDIAN_FILTER_SIZE);
+      printf("Filtered  : %.2f C  (EMA a=%.2f)\n", fFiltered, EMA_ALPHA);
+
+      if (xAlertHigh)
+        printf("ALERT     : HIGH (>= %.1f C)\n", ALERT_HIGH_C);
+      else if (xAlertLow)
+        printf("ALERT     : LOW  (<= %.1f C)\n", ALERT_LOW_C);
+      else
+        printf("State     : NORMAL\n");
     }
     else
     {
-      printf("Sensor    : DISCONNECTED\n");
+      printf("Sensor    : DISCONNECTED (ADC=%u)\n", usAdc);
     }
     printf("==========================\n\n");
 
@@ -59,20 +72,21 @@ static void prvTaskReport(void *pvParameters)
     lcd->clear();
     if (xValid)
     {
-      // Line 0: "T:XX.XXC [AL]" or "T:XX.XXC [OK]"
-      char line0[17];
-      snprintf(line0, sizeof(line0), "T:%.2fC %s", fTemp, xAlert ? "[AL]" : "[OK]");
-      lcd->printAt(0, 0, line0);
+      // Line 0: "R:25.3 F:25.1 C"
+      char acLine0[17];
+      snprintf(acLine0, sizeof(acLine0), "R:%.1f F:%.1f C", fRaw, fFiltered);
+      lcd->printAt(0, 0, acLine0);
 
-      // Line 1: "H:26.0  L:24.0"
-      char line1[17];
-      snprintf(line1, sizeof(line1), "H:%.1f  L:%.1f", THRESHOLD_HIGH_C, THRESHOLD_LOW_C);
-      lcd->printAt(0, 1, line1);
+      // Line 1: "M:25.2  [OK]" or "[HIGH]" / "[LOW]"
+      char acLine1[17];
+      const char *pcState = (xAlertHigh) ? "[HIGH]" : (xAlertLow) ? "[LOW]" : "[OK]";
+      snprintf(acLine1, sizeof(acLine1), "M:%.1f  %s", fMedian, pcState);
+      lcd->printAt(0, 1, acLine1);
     }
     else
     {
       lcd->printAt(0, 0, "Sensor error");
-      lcd->printAt(0, 1, "Reconnect...");
+      lcd->printAt(0, 1, "ADC disconnected");
     }
   }
 }

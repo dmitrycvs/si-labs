@@ -1,20 +1,28 @@
 #include "task_measure.h"
 #include "config.h"
-#include <OneWire.h>
-#include <DallasTemperature.h>
+#include <math.h>
 
 // Shared sensor data (protected by xDataMutex)
-SensorReading_t SensorData = {0.0f, false};
+SensorReading_t SensorData = {0, 0.0f, false};
 
 // Static handles
 static SemaphoreHandle_t s_xNewDataSemaphore = nullptr;
 static SemaphoreHandle_t s_xDataMutex        = nullptr;
 
-// Sensor driver objects
-static OneWire*          s_pOneWire  = nullptr;
-static DallasTemperature* s_pSensors = nullptr;
+// Convert raw ADC value to temperature (°C) using the Beta equation
+static float prvAdcToTemperature(uint16_t usAdc)
+{
+  // Voltage divider: Vout = Vcc * R_ntc / (R_series + R_ntc)
+  // => R_ntc = R_series * ADC / (ADC_MAX - ADC)
+  float fRntc = NTC_R_SERIES * (float)usAdc / (ADC_MAX - (float)usAdc);
 
-// Returns the latest raw temperature (thread-safe)
+  // Beta equation: T = 1 / ( 1/T0 + (1/B)*ln(R/R0) )
+  float fTkelvin = 1.0f / (1.0f / NTC_T0_K + (1.0f / NTC_BETA) * logf(fRntc / NTC_R0));
+
+  return fTkelvin - 273.15f;
+}
+
+// Thread-safe getter
 float sensor_read()
 {
   float fTemp = 0.0f;
@@ -29,34 +37,36 @@ float sensor_read()
 // Task function
 static void prvTaskMeasure(void *pvParameters)
 {
-  s_pOneWire = new OneWire(TEMP_SENSOR_PIN);
-  s_pSensors = new DallasTemperature(s_pOneWire);
-  s_pSensors->begin();
-  s_pSensors->setResolution(9);          // 9-bit: ~94 ms conversion time
-  s_pSensors->setWaitForConversion(true); // synchronous: block until conversion done
+  // ADC is configured in setup() before task creation
 
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   for (;;)
   {
-    // Request conversion and block until it completes (~94 ms), then read
-    s_pSensors->requestTemperatures();
-    float fTemp  = s_pSensors->getTempCByIndex(0);
-    bool  xValid = (fTemp != DEVICE_DISCONNECTED_C);
+    uint16_t usAdc = (uint16_t)analogRead(NTC_SENSOR_PIN);
 
-    // Update shared sensor data
+    // ADC railed at 0 or 4095 means the sensor is likely disconnected / shorted
+    bool xValid = (usAdc > 0) && (usAdc < (uint16_t)ADC_MAX);
+
+    float fTemp = 0.0f;
+    if (xValid)
+    {
+      fTemp = prvAdcToTemperature(usAdc);
+    }
+
+    // Update shared data
     if (xSemaphoreTake(s_xDataMutex, pdMS_TO_TICKS(10)) == pdTRUE)
     {
-      if (xValid)
-      {
-        SensorData.fRawTemperature = fTemp;
-      }
-      SensorData.xSensorValid = xValid;
+      SensorData.usRawAdc        = usAdc;
+      SensorData.fRawTemperature = fTemp;
+      SensorData.xSensorValid    = xValid;
       xSemaphoreGive(s_xDataMutex);
     }
 
-    // Signal that new data is available for the threshold alerting task
+    // Signal the conditioning task that new data is ready
     xSemaphoreGive(s_xNewDataSemaphore);
+
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(TASK_MEASURE_PERIOD_MS));
   }
 }
 

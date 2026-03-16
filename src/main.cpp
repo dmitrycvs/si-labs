@@ -9,23 +9,27 @@
 
 // Shared synchronisation primitives
 static SemaphoreHandle_t xNewDataSemaphore = nullptr; // signals task_stats when new reading is ready
-static SemaphoreHandle_t xDataMutex        = nullptr; // protects SensorData and Alert structs
+static SemaphoreHandle_t xDataMutex        = nullptr; // protects SensorData and Processed structs
 
 void setup()
 {
+  Serial.begin(115200);
+
+  // Configure ADC before any task uses it
+  analogReadResolution(12);
+  analogSetPinAttenuation(NTC_SENSOR_PIN, ADC_11db);
+
   xNewDataSemaphore = xSemaphoreCreateBinary();
   xDataMutex        = xSemaphoreCreateMutex();
 
-  // Task 1 – Sensor Acquisition: reads DS18B20 every TASK_MEASURE_PERIOD_MS
+  // Task 1 – Sensor Acquisition: reads NTC via ADC every TASK_MEASURE_PERIOD_MS
   vTaskMeasureCreate(xNewDataSemaphore, xDataMutex);
 
-  // Task 2 – Threshold Alerting: applies hysteresis + debounce, drives LEDs
+  // Task 2 – Signal Conditioning: saturation, median filter, EMA, alerts
   vTaskStatsCreate(xNewDataSemaphore, xDataMutex);
 
   // Task 3 – Display & Reporting: prints structured report every TASK_REPORT_PERIOD_MS
   vTaskReportCreate(xDataMutex);
-
-  vTaskStartScheduler();
 }
 
 void loop()
