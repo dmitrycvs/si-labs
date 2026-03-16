@@ -1,87 +1,86 @@
 #include "task_report.h"
 #include "config.h"
+#include "task_measure.h"
 #include "task_stats.h"
 #include "LCDController.h"
 
 // Static handle
-static SemaphoreHandle_t StatsMutex = nullptr;
+static SemaphoreHandle_t s_xDataMutex = nullptr;
 
-// LCD instance (I2C address 0x27, 16 columns, 2 rows)
-static LCDController* lcd = nullptr;
+// LCD instance (I2C address 0x27, 16x2)
+static LCDController *lcd = nullptr;
 
 // Task function
 static void prvTaskReport(void *pvParameters)
 {
-  TickType_t xLastWakeTime;
-
-  // Initialize LCD (I2C address 0x27, 16x2 display)
   lcd = new LCDController(0x27, 16, 2);
   lcd->setup();
 
-  // Initialize last wake time to current time
-  xLastWakeTime = xTaskGetTickCount();
+  TickType_t xLastWakeTime = xTaskGetTickCount();
 
   for (;;)
   {
-    // Wait for next period (exactly 10 seconds)
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(TASK_REPORT_PERIOD_MS));
 
-    // Acquire mutex to read AND reset statistics
-    if (xSemaphoreTake(StatsMutex, portMAX_DELAY) == pdTRUE)
+    // Snapshot all shared data atomically
+    float   fTemp      = 0.0f;
+    bool    xValid     = false;
+    bool    xAlert     = false;
+    bool    xRawCond   = false;
+    uint8_t ucDebounce = 0;
+
+    if (xSemaphoreTake(s_xDataMutex, pdMS_TO_TICKS(50)) == pdTRUE)
     {
-      uint32_t ulTotal = Stats.ulTotalPressCount;
-      uint32_t ulShort = Stats.ulShortPressCount;
-      uint32_t ulLong = Stats.ulLongPressCount;
-      uint32_t ulSumShort = Stats.ulSumShortDuration;
-      uint32_t ulSumLong = Stats.ulSumLongDuration;
+      fTemp      = SensorData.fRawTemperature;
+      xValid     = SensorData.xSensorValid;
+      xAlert     = Alert.xAlertActive;
+      xRawCond   = Alert.xRawCondition;
+      ucDebounce = Alert.ucDebounceCount;
+      xSemaphoreGive(s_xDataMutex);
+    }
 
-      // Calculate average
-      float fAverage = 0.0;
-      if (ulTotal > 0)
-      {
-        fAverage = (float)(ulSumShort + ulSumLong) / (float)ulTotal;
-      }
+    // --- Serial / STDIO report ---
+    printf("=== Temperature Report ===\n");
+    if (xValid)
+    {
+      printf("Raw temp  : %.2f C\n", fTemp);
+      printf("Threshold : H=%.1f C  L=%.1f C\n", THRESHOLD_HIGH_C, THRESHOLD_LOW_C);
+      printf("Raw cond  : %s threshold (pre-debounce)\n", xRawCond ? "ABOVE" : "BELOW");
+      printf("Debounce  : %u / %u samples\n", ucDebounce, DEBOUNCE_COUNT);
+      printf("State     : %s\n", xAlert ? "** ALERT **" : "NORMAL");
+    }
+    else
+    {
+      printf("Sensor    : DISCONNECTED\n");
+    }
+    printf("==========================\n\n");
 
-      // Print statistics to stdio (UART)
-      printf("=======================================\n");
-      printf("Total presses: %lu\n", ulTotal);
-      printf("Short presses: %lu\n", ulShort);
-      printf("Long presses: %lu\n", ulLong);
-      printf("Average duration: %.2f ms\n", fAverage);
-      printf("=======================================\n\n");
+    // --- LCD report (16x2) ---
+    lcd->clear();
+    if (xValid)
+    {
+      // Line 0: "T:XX.XXC [AL]" or "T:XX.XXC [OK]"
+      char line0[17];
+      snprintf(line0, sizeof(line0), "T:%.2fC %s", fTemp, xAlert ? "[AL]" : "[OK]");
+      lcd->printAt(0, 0, line0);
 
-      // Display statistics on LCD
-      lcd->clear();
-      
-      // Line 1: S:Y L:Z
-      lcd->printAt(0, 0, "T: ");
-      lcd->print(String(ulTotal).c_str());
-      lcd->print(" S: ");
-      lcd->print(String(ulShort).c_str());
-      lcd->print(" L: ");
-      lcd->print(String(ulLong).c_str());
-      
-      // Line 2: Avg: X.XX ms
-      lcd->printAt(0, 1, "Avg: ");
-      lcd->print(String(fAverage, 2).c_str());
-      lcd->print(" ms");
-
-      // Reset statistics while still holding the mutex
-      Stats.ulTotalPressCount = 0;
-      Stats.ulShortPressCount = 0;
-      Stats.ulLongPressCount = 0;
-      Stats.ulSumShortDuration = 0;
-      Stats.ulSumLongDuration = 0;
-
-      xSemaphoreGive(StatsMutex);
+      // Line 1: "H:26.0  L:24.0"
+      char line1[17];
+      snprintf(line1, sizeof(line1), "H:%.1f  L:%.1f", THRESHOLD_HIGH_C, THRESHOLD_LOW_C);
+      lcd->printAt(0, 1, line1);
+    }
+    else
+    {
+      lcd->printAt(0, 0, "Sensor error");
+      lcd->printAt(0, 1, "Reconnect...");
     }
   }
 }
 
 // Create function
-void vTaskReportCreate(SemaphoreHandle_t xStatsMutex)
+void vTaskReportCreate(SemaphoreHandle_t xDataMutex)
 {
-  StatsMutex = xStatsMutex;
+  s_xDataMutex = xDataMutex;
 
   xTaskCreate(
       prvTaskReport,

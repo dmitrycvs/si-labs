@@ -6,30 +6,17 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
-// Statistics structure (for internal use)
+// Alert state shared between tasks (protected by xDataMutex)
 typedef struct
 {
-  uint32_t ulTotalPressCount;
-  uint32_t ulShortPressCount;
-  uint32_t ulLongPressCount;
-  uint32_t ulSumShortDuration;
-  uint32_t ulSumLongDuration;
-} Statistics_t;
+  bool    xAlertActive;    // confirmed alert state (after debounce)
+  bool    xRawCondition;   // raw threshold condition before debounce
+  uint8_t ucDebounceCount; // current consecutive-sample counter
+} AlertState_t;
 
-// External statistics reference
-extern Statistics_t Stats;
+extern AlertState_t Alert;
 
-// Function to create the stats task
-void vTaskStatsCreate(SemaphoreHandle_t xPressSemaphore, SemaphoreHandle_t xStatsMutex);
-
-// Statistics getters (protected by mutex)
-uint32_t ulGetTotalPressCount();
-uint32_t ulGetShortPressCount();
-uint32_t ulGetLongPressCount();
-uint32_t ulGetSumShortDuration();
-uint32_t ulGetSumLongDuration();
-
-// Reset statistics (protected by mutex)
-void vResetStatistics();
+// Create the threshold alerting task
+void vTaskStatsCreate(SemaphoreHandle_t xNewDataSemaphore, SemaphoreHandle_t xDataMutex);
 
 #endif // TASK_STATS_H

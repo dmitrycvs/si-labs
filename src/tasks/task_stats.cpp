@@ -1,146 +1,100 @@
 #include "task_stats.h"
-#include "config.h"
 #include "task_measure.h"
+#include "config.h"
 #include "LedController.h"
 
-// Static statistics (protected by mutex)
-Statistics_t Stats = {0, 0, 0, 0, 0};
+// Shared alert state (protected by xDataMutex)
+AlertState_t Alert = {false, false, 0};
 
 // Static handles
-static SemaphoreHandle_t PressSemaphore = nullptr;
-static SemaphoreHandle_t StatsMutex = nullptr;
+static SemaphoreHandle_t s_xNewDataSemaphore = nullptr;
+static SemaphoreHandle_t s_xDataMutex        = nullptr;
 
-// LED instances - use pointers to avoid static initialization issues
+// LED instances
 static LedController *GreenLed = nullptr;
-static LedController *RedLed = nullptr;
-static LedController *YellowLed = nullptr;
-
-// Getters
-uint32_t ulGetTotalPressCount()
-{
-  return Stats.ulTotalPressCount;
-}
-
-uint32_t ulGetShortPressCount()
-{
-  return Stats.ulShortPressCount;
-}
-
-uint32_t ulGetLongPressCount()
-{
-  return Stats.ulLongPressCount;
-}
-
-uint32_t ulGetSumShortDuration()
-{
-  return Stats.ulSumShortDuration;
-}
-
-uint32_t ulGetSumLongDuration()
-{
-  return Stats.ulSumLongDuration;
-}
-
-// Reset function
-void vResetStatistics()
-{
-  if (xSemaphoreTake(StatsMutex, portMAX_DELAY) == pdTRUE)
-  {
-    Stats.ulTotalPressCount = 0;
-    Stats.ulShortPressCount = 0;
-    Stats.ulLongPressCount = 0;
-    Stats.ulSumShortDuration = 0;
-    Stats.ulSumLongDuration = 0;
-    xSemaphoreGive(StatsMutex);
-  }
-}
-
-// Blink yellow LED N times
-static void prvBlinkYellowLed(uint8_t ucCount)
-{
-  for (uint8_t i = 0; i < ucCount; i++)
-  {
-    YellowLed->turnOn();
-    vTaskDelay(pdMS_TO_TICKS(YELLOW_BLINK_DELAY_MS));
-    YellowLed->turnOff();
-    vTaskDelay(pdMS_TO_TICKS(YELLOW_BLINK_DELAY_MS));
-  }
-}
-
-// Indicate press type with Green or Red LED
-static void prvIndicatePressType(bool xIsLong)
-{
-  if (xIsLong)
-  {
-    // Long press - Red LED
-    RedLed->turnOn();
-    vTaskDelay(pdMS_TO_TICKS(INDICATION_DURATION_MS));
-    RedLed->turnOff();
-  }
-  else
-  {
-    // Short press - Green LED
-    GreenLed->turnOn();
-    vTaskDelay(pdMS_TO_TICKS(INDICATION_DURATION_MS));
-    GreenLed->turnOff();
-  }
-}
+static LedController *RedLed   = nullptr;
 
 // Task function
 static void prvTaskStats(void *pvParameters)
 {
-  // Create and setup LEDs
   GreenLed = new LedController(GREEN_LED_PIN);
-  RedLed = new LedController(RED_LED_PIN);
-  YellowLed = new LedController(YELLOW_LED_PIN);
-
+  RedLed   = new LedController(RED_LED_PIN);
   GreenLed->setup();
   RedLed->setup();
-  YellowLed->setup();
+
+  // Initial state: normal (green on)
+  GreenLed->turnOn();
+  RedLed->turnOff();
 
   for (;;)
   {
-    // Wait for press event from Task 1
-    if (xSemaphoreTake(PressSemaphore, portMAX_DELAY) == pdTRUE)
+    // Block until task_measure signals that new data is ready
+    if (xSemaphoreTake(s_xNewDataSemaphore, portMAX_DELAY) == pdTRUE)
     {
-      // Get press data
-      uint32_t ulDuration = ulGetLastPressDuration();
-      bool xIsLong = xGetLastPressIsLong();
-
-      // Update statistics (protected by mutex)
-      if (xSemaphoreTake(StatsMutex, portMAX_DELAY) == pdTRUE)
+      if (xSemaphoreTake(s_xDataMutex, pdMS_TO_TICKS(10)) == pdTRUE)
       {
-        Stats.ulTotalPressCount++;
+        float fTemp  = SensorData.fRawTemperature;
+        bool  xValid = SensorData.xSensorValid;
 
-        if (xIsLong)
+        if (xValid)
         {
-          Stats.ulLongPressCount++;
-          Stats.ulSumLongDuration += ulDuration;
-        }
-        else
-        {
-          Stats.ulShortPressCount++;
-          Stats.ulSumShortDuration += ulDuration;
+          // --- Hysteresis threshold ---
+          // Use THRESHOLD_HIGH_C to trigger an alert from normal state,
+          // use THRESHOLD_LOW_C to clear it (prevents chattering near the boundary).
+          bool xCondition;
+          if (!Alert.xAlertActive)
+          {
+            xCondition = (fTemp >= THRESHOLD_HIGH_C); // trigger when crossing high
+          }
+          else
+          {
+            xCondition = (fTemp >= THRESHOLD_LOW_C);  // clear only when crossing low
+          }
+
+          Alert.xRawCondition = xCondition;
+
+          // --- Debounce / anti-bounce ---
+          // The new state must persist for DEBOUNCE_COUNT consecutive samples
+          // before the confirmed alert state is updated.
+          if (xCondition != Alert.xAlertActive)
+          {
+            Alert.ucDebounceCount++;
+            if (Alert.ucDebounceCount >= DEBOUNCE_COUNT)
+            {
+              Alert.xAlertActive    = xCondition;
+              Alert.ucDebounceCount = 0;
+
+              // Update LEDs to reflect confirmed state change
+              if (Alert.xAlertActive)
+              {
+                GreenLed->turnOff();
+                RedLed->turnOn();
+              }
+              else
+              {
+                RedLed->turnOff();
+                GreenLed->turnOn();
+              }
+            }
+          }
+          else
+          {
+            // Condition matches current state — reset pending counter
+            Alert.ucDebounceCount = 0;
+          }
         }
 
-        xSemaphoreGive(StatsMutex);
+        xSemaphoreGive(s_xDataMutex);
       }
-
-      // Indicate press type with Green or Red LED
-      prvIndicatePressType(xIsLong);
-
-      // Blink yellow LED based on press type
-      uint8_t ucBlinkCount = xIsLong ? 10 : 5;
-      prvBlinkYellowLed(ucBlinkCount);
     }
   }
 }
 
 // Create function
-void vTaskStatsCreate(SemaphoreHandle_t xPressSemaphore, SemaphoreHandle_t xStatsMutex)
+void vTaskStatsCreate(SemaphoreHandle_t xNewDataSemaphore, SemaphoreHandle_t xDataMutex)
 {
-  PressSemaphore = xPressSemaphore;
-  StatsMutex = xStatsMutex;
+  s_xNewDataSemaphore = xNewDataSemaphore;
+  s_xDataMutex        = xDataMutex;
 
   xTaskCreate(
       prvTaskStats,

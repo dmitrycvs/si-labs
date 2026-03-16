@@ -6,7 +6,7 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
-// Function to create the report task
-void vTaskReportCreate(SemaphoreHandle_t xStatsMutex);
+// Create the display & reporting task
+void vTaskReportCreate(SemaphoreHandle_t xDataMutex);
 
 #endif // TASK_REPORT_H
