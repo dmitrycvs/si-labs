@@ -2,11 +2,11 @@
 #define TASK_REPORT_H
 
 #include <Arduino.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
 
-// Create the display & reporting task
-void vTaskReportCreate(SemaphoreHandle_t xDataMutex);
+// Call once in setup()
+void task_report_init();
+
+// Call every loop iteration — internally rate-limits to TASK_REPORT_PERIOD_MS
+void task_report_run();
 
 #endif // TASK_REPORT_H
