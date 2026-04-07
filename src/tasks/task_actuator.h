@@ -3,13 +3,13 @@
 
 #include <Arduino.h>
 
-// Returns current relay state: 0=OFF, 1=ON
-uint8_t actuator_get_state();
+// Returns current servo position in degrees (0-180)
+uint8_t actuator_get_position();
 
 // Call once in setup()
 void task_actuator_init();
 
-// Call every loop iteration — runs at TASK_SIGNAL_PERIOD_MS (derived recurrence)
+// Call every loop iteration — drives servo at TASK_SIGNAL_PERIOD_MS
 void task_actuator_run();
 
 #endif // TASK_ACTUATOR_H

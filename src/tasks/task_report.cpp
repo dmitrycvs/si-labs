@@ -13,23 +13,24 @@ void task_report_run()
   if ((uint32_t)(millis() - s_last_run) < TASK_REPORT_PERIOD_MS) return;
   s_last_run = millis();
 
-  uint8_t  state    = ActuatorData.actuator_state;
-  uint32_t duration = (uint32_t)millis() - ActuatorData.state_changed_at;
-  bool     alert    = ActuatorData.alert;
+  uint8_t raw       = ServoData.raw_target;
+  uint8_t cond      = ServoData.conditioned_target;
+  uint8_t actual    = ServoData.actual_position;
+  bool    at_min    = ServoData.alert_at_min;
+  bool    at_max    = ServoData.alert_at_max;
 
-  // ── Serial structured report ──────────────────────────────────────────
-  Serial.println(F("=== Actuator Report ==="));
-  Serial.print(F("State    : ")); Serial.println(state ? F("ON") : F("OFF"));
-  Serial.print(F("Duration : ")); Serial.print(duration); Serial.println(F(" ms"));
-  if (alert)
-  {
-    Serial.print(F("ALERT    : ON for > "));
-    Serial.print(ALERT_ON_DURATION_MS);
-    Serial.println(F(" ms !"));
-  }
+  // ── Structured serial report ──────────────────────────────────────────────
+  Serial.println(F("=== Servo Report ==="));
+  Serial.print(F("Raw target  : ")); Serial.print(raw);    Serial.println(F(" deg"));
+  Serial.print(F("Conditioned : ")); Serial.print(cond);   Serial.println(F(" deg"));
+  Serial.print(F("Position    : ")); Serial.print(actual); Serial.println(F(" deg"));
+
+  if (at_min)
+    Serial.println(F("ALERT       : Limit reached - MIN position"));
+  else if (at_max)
+    Serial.println(F("ALERT       : Limit reached - MAX position"));
   else
-  {
-    Serial.println(F("Status   : OK"));
-  }
-  Serial.println(F("=======================\n"));
+    Serial.println(F("Status      : OK"));
+
+  Serial.println(F("====================\n"));
 }
