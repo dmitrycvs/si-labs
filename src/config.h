@@ -2,23 +2,21 @@
 #define CONFIG_H
 
 // --- Pin definitions (Arduino Uno) ---
-#define SERVO_PIN           7     // servo PWM signal
+#define DHT_PIN             3     // DHT22 data pin
+#define RELAY_PIN           12    // relay IN pin (HIGH = energised)
+#define BTN_UP_PIN          9     // setpoint UP button (INPUT_PULLUP, pressed = LOW)
+#define BTN_DOWN_PIN        8     // setpoint DOWN button
 
-// --- Servo physical limits (degrees) ---
-#define SERVO_MIN           0     // minimum position (degrees)
-#define SERVO_MAX           180   // maximum position (degrees)
-
-// --- Signal conditioning ---
-#define MEDIAN_WINDOW       5     // median filter window size (must be odd)
-#define EMA_ALPHA           0.3f  // EMA weight for new sample (0.0-1.0)
-#define RAMP_STEP           3     // max degrees moved per cycle during ramping
-
-// --- Alert thresholds ---
-#define ALERT_NEAR_MIN      5     // alert if position <= this value (degrees)
-#define ALERT_NEAR_MAX      175   // alert if position >= this value (degrees)
+// --- Default control parameters ---
+#define DEFAULT_SETPOINT    25.0f // default setpoint (°C)
+#define DEFAULT_HYSTERESIS   2.0f // hysteresis half-band (°C)
+#define SETPOINT_STEP        1.0f // °C per button press
 
 // --- Timing (ms) ---
-#define TASK_SIGNAL_PERIOD_MS    50    // signal conditioning period
-#define TASK_REPORT_PERIOD_MS   500    // display & reporting period
+#define TASK_MEASURE_PERIOD_MS   2000  // DHT22 needs at least 2 s between reads
+#define TASK_CONTROL_PERIOD_MS   1000  // hysteresis evaluation
+#define TASK_REPORT_PERIOD_MS    2000  // serial plotter line
+#define TASK_REPORT_HUMAN_MS     4000  // human-readable status block
+#define BTN_DEBOUNCE_MS            50  // button debounce interval
 
 #endif // CONFIG_H
