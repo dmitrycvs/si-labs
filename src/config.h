@@ -1,22 +1,38 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#pragma once
+#include <Arduino.h>
+#include "tasks/task_acquisition.h"
+#include "tasks/task_output.h"
+#include "tasks/task_logger.h"
 
-// --- Pin definitions (Arduino Uno) ---
-#define DHT_PIN             3     // DHT22 data pin
-#define RELAY_PIN           12    // relay IN pin (HIGH = energised)
-#define BTN_UP_PIN          9     // setpoint UP button (INPUT_PULLUP, pressed = LOW)
-#define BTN_DOWN_PIN        8     // setpoint DOWN button
+namespace Config
+{
+  constexpr uint8_t DHT_PIN      = 3;
+  constexpr uint8_t RELAY_PIN    = 12;
+  constexpr uint8_t BTN_UP_PIN   = 9;
+  constexpr uint8_t BTN_DOWN_PIN = 8;
 
-// --- Default control parameters ---
-#define DEFAULT_SETPOINT    25.0f // default setpoint (°C)
-#define DEFAULT_HYSTERESIS   2.0f // hysteresis half-band (°C)
-#define SETPOINT_STEP        1.0f // °C per button press
+  static constexpr TaskAcquisition::Config ACQUISITION_CFG{
+      .dhtPin           = DHT_PIN,
+      .upButtonPin      = BTN_UP_PIN,
+      .downButtonPin    = BTN_DOWN_PIN,
+      .buttonsActiveLow = true,
+      .buttonDebounceMs = 50,
+      .setpointInitDeg  = 25,
+      .setpointMinDeg   = 10,
+      .setpointMaxDeg   = 40,
+      .setpointStepDeg  = 1,
+      .hysteresisDeg    = 2.0f,
+      .buttonPeriodMs   = 50,
+      .samplePeriodMs   = 2000,
+      .controlPeriodMs  = 1000,
+  };
 
-// --- Timing (ms) ---
-#define TASK_MEASURE_PERIOD_MS   2000  // DHT22 needs at least 2 s between reads
-#define TASK_CONTROL_PERIOD_MS   1000  // hysteresis evaluation
-#define TASK_REPORT_PERIOD_MS    2000  // serial plotter line
-#define TASK_REPORT_HUMAN_MS     4000  // human-readable status block
-#define BTN_DEBOUNCE_MS            50  // button debounce interval
+  static constexpr TaskOutput::Config OUTPUT_CFG{
+      .relayPin = RELAY_PIN,
+      .periodMs = 100,
+  };
 
-#endif // CONFIG_H
+  static constexpr TaskLogger::Config LOGGER_CFG{
+      .periodMs = 2000,
+  };
+}
