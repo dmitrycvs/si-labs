@@ -2,9 +2,9 @@
 
 #include <Arduino.h>
 
-#include "task_acquisition.h"
+#include "task_sensor.h"
 
-namespace TaskLogger
+namespace TaskMonitor
 {
   struct Config
   {
@@ -12,5 +12,5 @@ namespace TaskLogger
   };
 
   void setup(const Config &cfg);
-  void tick(const TaskAcquisition::State &sensor, bool relayOn);
+  void tick(const TaskSensor::State &s, bool fanOn);
 }

@@ -19,12 +19,12 @@ void DhtSensor::setup(const Config &cfg) {
   g_dht->begin();
 }
 
-bool DhtSensor::readTemperature(float &outDegC) {
+bool DhtSensor::readHumidity(float &outPct) {
   if (g_dht == nullptr) return false;
 
-  const float t = g_dht->readTemperature();
-  if (isnan(t)) return false;
+  const float h = g_dht->readHumidity();
+  if (isnan(h)) return false;
 
-  outDegC = t;
+  outPct = h;
   return true;
 }

@@ -1,26 +1,26 @@
 #include <Arduino.h>
 #include "Console.h"
 #include "config.h"
-#include "tasks/task_acquisition.h"
-#include "tasks/task_output.h"
-#include "tasks/task_logger.h"
+#include "tasks/task_sensor.h"
+#include "tasks/task_driver.h"
+#include "tasks/task_monitor.h"
 
 void setup()
 {
   Console::init();
 
-  TaskAcquisition::setup(Config::ACQUISITION_CFG);
-  TaskOutput::setup(Config::OUTPUT_CFG);
-  TaskLogger::setup(Config::LOGGER_CFG);
+  TaskSensor::setup(Config::SENSOR_CFG);
+  TaskDriver::setup(Config::DRIVER_CFG);
+  TaskMonitor::setup(Config::MONITOR_CFG);
 }
 
 void loop()
 {
-  TaskAcquisition::tick();
-  const TaskAcquisition::State sensorState = TaskAcquisition::getState();
+  TaskSensor::tick();
+  const TaskSensor::State s = TaskSensor::getState();
 
-  TaskOutput::commandState(sensorState.relayRequestOn);
-  TaskOutput::tick();
+  TaskDriver::commandDutyPct(s.pwmDuty);
+  TaskDriver::tick();
 
-  TaskLogger::tick(sensorState, TaskOutput::isOn());
+  TaskMonitor::tick(s, TaskDriver::isActive());
 }
