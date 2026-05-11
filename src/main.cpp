@@ -3,9 +3,49 @@
 #include "PushButton.h"
 #include "config.h"
 
-enum class LedState { OFF, ON };
+// ── FSM types ────────────────────────────────────────────────────────────────
 
-static LedState   g_state = LedState::OFF;
+enum class State : uint8_t { OFF, ON };
+enum class Event : uint8_t { NONE, BUTTON_PRESS };
+
+struct Fsm {
+  State current = State::OFF;
+};
+
+// ── Input sampling ────────────────────────────────────────────────────────────
+
+static Event collectEvent(PushButton &btn) {
+  if (btn.pollRisingEdge()) return Event::BUTTON_PRESS;
+  return Event::NONE;
+}
+
+// ── FSM step (run-to-completion) ──────────────────────────────────────────────
+
+static void fsmStep(Fsm &fsm, Event ev) {
+  if (ev == Event::NONE) return;
+
+  switch (fsm.current) {
+    case State::OFF:
+      if (ev == Event::BUTTON_PRESS) {
+        fsm.current = State::ON;
+        digitalWrite(Config::PIN_LED, HIGH);
+        printf("State: ON\r\n");
+      }
+      break;
+
+    case State::ON:
+      if (ev == Event::BUTTON_PRESS) {
+        fsm.current = State::OFF;
+        digitalWrite(Config::PIN_LED, LOW);
+        printf("State: OFF\r\n");
+      }
+      break;
+  }
+}
+
+// ── Arduino entry points ──────────────────────────────────────────────────────
+
+static Fsm        g_fsm;
 static PushButton g_button;
 
 void setup() {
@@ -21,18 +61,6 @@ void setup() {
 }
 
 void loop() {
-  if (!g_button.pollRisingEdge()) return;
-
-  switch (g_state) {
-    case LedState::OFF:
-      g_state = LedState::ON;
-      digitalWrite(Config::PIN_LED, HIGH);
-      printf("State: ON\r\n");
-      break;
-    case LedState::ON:
-      g_state = LedState::OFF;
-      digitalWrite(Config::PIN_LED, LOW);
-      printf("State: OFF\r\n");
-      break;
-  }
+  const Event ev = collectEvent(g_button);
+  fsmStep(g_fsm, ev);
 }
