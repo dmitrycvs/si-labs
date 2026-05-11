@@ -1,23 +1,26 @@
 #include <Arduino.h>
 #include <Arduino_FreeRTOS.h>
-#include "Console.h"
+#include <semphr.h>
 #include "PushButton.h"
 #include "config.h"
 
-// Combined intersection FSM state.
-// EW has default priority (stays green until NS requests).
-// Full sequence on NS request:
-//   EW_GREEN → EW_YELLOW → ALL_RED → NS_GREEN → NS_YELLOW → ALL_RED → EW_GREEN
-enum class TLState : uint8_t {
-  EW_GREEN,
-  EW_YELLOW,
-  ALL_RED_1,
-  NS_GREEN,
-  NS_YELLOW,
-  ALL_RED_2,
-};
+// ── EW FSM types ──────────────────────────────────────────────────────────────
 
-static PushButton g_button;
+enum class EWState : uint8_t { GREEN, YELLOW, RED };
+enum class EWEvent : uint8_t { NONE, NS_REQUESTED, TIMER_EXPIRED, NS_DONE };
+
+// ── NS FSM types ──────────────────────────────────────────────────────────────
+
+enum class NSState : uint8_t { RED, GREEN, YELLOW };
+enum class NSEvent : uint8_t { NONE, EW_CLEARED, TIMER_EXPIRED };
+
+// ── Shared primitives ─────────────────────────────────────────────────────────
+
+static SemaphoreHandle_t g_ewClearedSem; // EW gives when RED  → NS may proceed
+static SemaphoreHandle_t g_nsDoneSem;    // NS gives when RED  → EW may proceed
+static PushButton        g_button;
+
+// ── Hardware helpers ──────────────────────────────────────────────────────────
 
 static void setEW(bool g, bool y, bool r) {
   digitalWrite(Config::PIN_EW_GREEN,  g ? HIGH : LOW);
@@ -31,79 +34,136 @@ static void setNS(bool g, bool y, bool r) {
   digitalWrite(Config::PIN_NS_RED,    r ? HIGH : LOW);
 }
 
-static void printState(TLState s) {
-  switch (s) {
-    case TLState::EW_GREEN:  printf("EW=GREEN  | NS=RED\n");    break;
-    case TLState::EW_YELLOW: printf("EW=YELLOW | NS=RED\n");    break;
-    case TLState::ALL_RED_1: printf("EW=RED    | NS=RED\n");    break;
-    case TLState::NS_GREEN:  printf("EW=RED    | NS=GREEN\n");  break;
-    case TLState::NS_YELLOW: printf("EW=RED    | NS=YELLOW\n"); break;
-    case TLState::ALL_RED_2: printf("EW=RED    | NS=RED\n");    break;
+// ── EW FSM ────────────────────────────────────────────────────────────────────
+
+// Blocks until an event is available for the current EW state.
+static EWEvent ewCollectEvent(EWState state) {
+  switch (state) {
+    case EWState::GREEN:
+      if (g_button.pollRisingEdge()) return EWEvent::NS_REQUESTED;
+      vTaskDelay(pdMS_TO_TICKS(Config::BTN_PERIOD_MS));
+      return EWEvent::NONE;
+
+    case EWState::YELLOW:
+      vTaskDelay(pdMS_TO_TICKS(Config::YELLOW_MS));
+      return EWEvent::TIMER_EXPIRED;
+
+    case EWState::RED:
+      xSemaphoreTake(g_nsDoneSem, portMAX_DELAY);
+      vTaskDelay(pdMS_TO_TICKS(Config::ALL_RED_MS)); // all-red safety gap
+      return EWEvent::NS_DONE;
+  }
+  return EWEvent::NONE;
+}
+
+// Run-to-completion step: (state, event) → next state + output.
+static void ewFsmStep(EWState &state, EWEvent ev) {
+  switch (state) {
+    case EWState::GREEN:
+      if (ev == EWEvent::NS_REQUESTED) {
+        state = EWState::YELLOW;
+        setEW(false, true, false);
+        Serial.println(F("EW=YELLOW | NS=RED"));
+      }
+      break;
+
+    case EWState::YELLOW:
+      if (ev == EWEvent::TIMER_EXPIRED) {
+        state = EWState::RED;
+        setEW(false, false, true);
+        Serial.println(F("EW=RED    | NS=RED"));
+        xSemaphoreGive(g_ewClearedSem);
+      }
+      break;
+
+    case EWState::RED:
+      if (ev == EWEvent::NS_DONE) {
+        state = EWState::GREEN;
+        setEW(true, false, false);
+        Serial.println(F("EW=GREEN  | NS=RED"));
+      }
+      break;
   }
 }
 
-static void taskTrafficLight(void *pvParameters) {
-  (void)pvParameters;
-  TLState state = TLState::EW_GREEN;
+static void taskEW(void *pvParams) {
+  (void)pvParams;
+  EWState state = EWState::GREEN;
+  setEW(true, false, false);
+  Serial.println(F("EW=GREEN  | NS=RED"));
 
   for (;;) {
-    switch (state) {
-      case TLState::EW_GREEN:
-        setEW(true, false, false);
-        setNS(false, false, true);
-        printState(state);
-        // Hold green until NS request is detected (debounced rising edge).
-        while (!g_button.pollRisingEdge()) {
-          vTaskDelay(pdMS_TO_TICKS(Config::BTN_PERIOD_MS));
-        }
-        state = TLState::EW_YELLOW;
-        break;
-
-      case TLState::EW_YELLOW:
-        setEW(false, true, false);
-        setNS(false, false, true);
-        printState(state);
-        vTaskDelay(pdMS_TO_TICKS(Config::YELLOW_MS));
-        state = TLState::ALL_RED_1;
-        break;
-
-      case TLState::ALL_RED_1:
-        setEW(false, false, true);
-        setNS(false, false, true);
-        printState(state);
-        vTaskDelay(pdMS_TO_TICKS(Config::ALL_RED_MS));
-        state = TLState::NS_GREEN;
-        break;
-
-      case TLState::NS_GREEN:
-        setEW(false, false, true);
-        setNS(true, false, false);
-        printState(state);
-        vTaskDelay(pdMS_TO_TICKS(Config::GREEN_MS));
-        state = TLState::NS_YELLOW;
-        break;
-
-      case TLState::NS_YELLOW:
-        setEW(false, false, true);
-        setNS(false, true, false);
-        printState(state);
-        vTaskDelay(pdMS_TO_TICKS(Config::YELLOW_MS));
-        state = TLState::ALL_RED_2;
-        break;
-
-      case TLState::ALL_RED_2:
-        setEW(false, false, true);
-        setNS(false, false, true);
-        printState(state);
-        vTaskDelay(pdMS_TO_TICKS(Config::ALL_RED_MS));
-        state = TLState::EW_GREEN;
-        break;
-    }
+    const EWEvent ev = ewCollectEvent(state);
+    ewFsmStep(state, ev);
   }
 }
 
+// ── NS FSM ────────────────────────────────────────────────────────────────────
+
+// Blocks until an event is available for the current NS state.
+static NSEvent nsCollectEvent(NSState state) {
+  switch (state) {
+    case NSState::RED:
+      xSemaphoreTake(g_ewClearedSem, portMAX_DELAY);
+      vTaskDelay(pdMS_TO_TICKS(Config::ALL_RED_MS)); // all-red safety gap
+      return NSEvent::EW_CLEARED;
+
+    case NSState::GREEN:
+      vTaskDelay(pdMS_TO_TICKS(Config::GREEN_MS));
+      return NSEvent::TIMER_EXPIRED;
+
+    case NSState::YELLOW:
+      vTaskDelay(pdMS_TO_TICKS(Config::YELLOW_MS));
+      return NSEvent::TIMER_EXPIRED;
+  }
+  return NSEvent::NONE;
+}
+
+// Run-to-completion step: (state, event) → next state + output.
+static void nsFsmStep(NSState &state, NSEvent ev) {
+  switch (state) {
+    case NSState::RED:
+      if (ev == NSEvent::EW_CLEARED) {
+        state = NSState::GREEN;
+        setNS(true, false, false);
+        Serial.println(F("EW=RED    | NS=GREEN"));
+      }
+      break;
+
+    case NSState::GREEN:
+      if (ev == NSEvent::TIMER_EXPIRED) {
+        state = NSState::YELLOW;
+        setNS(false, true, false);
+        Serial.println(F("EW=RED    | NS=YELLOW"));
+      }
+      break;
+
+    case NSState::YELLOW:
+      if (ev == NSEvent::TIMER_EXPIRED) {
+        state = NSState::RED;
+        setNS(false, false, true);
+        Serial.println(F("EW=RED    | NS=RED"));
+        xSemaphoreGive(g_nsDoneSem);
+      }
+      break;
+  }
+}
+
+static void taskNS(void *pvParams) {
+  (void)pvParams;
+  NSState state = NSState::RED;
+  setNS(false, false, true);
+
+  for (;;) {
+    const NSEvent ev = nsCollectEvent(state);
+    nsFsmStep(state, ev);
+  }
+}
+
+// ── Arduino entry points ──────────────────────────────────────────────────────
+
 void setup() {
-  Console::init();
+  Serial.begin(9600);
 
   pinMode(Config::PIN_EW_GREEN,  OUTPUT);
   pinMode(Config::PIN_EW_YELLOW, OUTPUT);
@@ -114,9 +174,13 @@ void setup() {
 
   g_button.setup({ Config::PIN_BUTTON, true, Config::DEBOUNCE_MS });
 
-  printf("Smart Traffic Light FSM\n");
+  g_ewClearedSem = xSemaphoreCreateBinary();
+  g_nsDoneSem    = xSemaphoreCreateBinary();
 
-  xTaskCreate(taskTrafficLight, "TL", 512, NULL, 1, NULL);
+  Serial.println(F("Smart Traffic Light FSM"));
+
+  xTaskCreate(taskEW, "EW", 256, NULL, 1, NULL);
+  xTaskCreate(taskNS, "NS", 256, NULL, 1, NULL);
 }
 
 void loop() {}
