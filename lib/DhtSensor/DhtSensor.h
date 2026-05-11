@@ -12,8 +12,8 @@ public:
 
   void setup(const Config &cfg);
 
-  // Returns true when a valid temperature reading is obtained.
-  bool readTemperature(float &outDegC);
+  // Returns true when a valid humidity reading is obtained.
+  bool readHumidity(float &outPct);
 
 private:
   uint8_t m_dataPin = 255;

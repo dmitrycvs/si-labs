@@ -7,7 +7,7 @@
 namespace Config
 {
   constexpr uint8_t DHT_PIN      = 3;
-  constexpr uint8_t RELAY_PIN    = 12;
+  constexpr uint8_t SERVO_PIN    = 7;
   constexpr uint8_t BTN_UP_PIN   = 9;
   constexpr uint8_t BTN_DOWN_PIN = 8;
 
@@ -17,19 +17,19 @@ namespace Config
       .downButtonPin    = BTN_DOWN_PIN,
       .buttonsActiveLow = true,
       .buttonDebounceMs = 50,
-      .setpointInitDeg  = 25,
-      .setpointMinDeg   = 10,
-      .setpointMaxDeg   = 40,
-      .setpointStepDeg  = 1,
-      .hysteresisDeg    = 2.0f,
+      .setpointInitPct  = 55,
+      .setpointMinPct   = 30,
+      .setpointMaxPct   = 90,
+      .setpointStepPct  = 1,
+      .hysteresisPct    = 3.0f,
       .buttonPeriodMs   = 50,
       .samplePeriodMs   = 2000,
       .controlPeriodMs  = 1000,
   };
 
   static constexpr TaskOutput::Config OUTPUT_CFG{
-      .relayPin = RELAY_PIN,
-      .periodMs = 100,
+      .servoPin = SERVO_PIN,
+      .periodMs = 50,
   };
 
   static constexpr TaskLogger::Config LOGGER_CFG{

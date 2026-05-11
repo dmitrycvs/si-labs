@@ -5,7 +5,7 @@
 
 namespace
 {
-  TaskAcquisition::Config g_cfg{3, 9, 8, true, 50, 25, 10, 40, 1, 2.0f, 50, 2000, 1000};
+  TaskAcquisition::Config g_cfg{3, 9, 8, true, 50, 55, 30, 90, 1, 3.0f, 50, 2000, 1000};
   TaskAcquisition::State  g_state{};
 
   PushButton g_btnUp;
@@ -25,8 +25,8 @@ namespace
 
   void refreshBounds()
   {
-    g_state.lowerBoundDeg = (float)g_state.setpointDeg - g_cfg.hysteresisDeg;
-    g_state.upperBoundDeg = (float)g_state.setpointDeg + g_cfg.hysteresisDeg;
+    g_state.lowerBoundPct = (float)g_state.setpointPct - g_cfg.hysteresisPct;
+    g_state.upperBoundPct = (float)g_state.setpointPct + g_cfg.hysteresisPct;
   }
 }
 
@@ -48,11 +48,11 @@ namespace TaskAcquisition
     });
     g_dht.setup(DhtSensor::Config{.dataPin = g_cfg.dhtPin});
 
-    g_state                    = {};
-    g_state.temperatureCelsius = 0.0f;
-    g_state.sensorValid        = false;
-    g_state.setpointDeg        = clamp(g_cfg.setpointInitDeg, g_cfg.setpointMinDeg, g_cfg.setpointMaxDeg);
-    g_state.relayRequestOn     = false;
+    g_state               = {};
+    g_state.humidityPct   = 0.0f;
+    g_state.sensorValid   = false;
+    g_state.setpointPct   = clamp(g_cfg.setpointInitPct, g_cfg.setpointMinPct, g_cfg.setpointMaxPct);
+    g_state.relayRequestOn = false;
     refreshBounds();
 
     const uint32_t now = millis();
@@ -72,17 +72,17 @@ namespace TaskAcquisition
       bool changed = false;
       if (g_btnUp.pollRisingEdge())
       {
-        g_state.setpointDeg += g_cfg.setpointStepDeg;
+        g_state.setpointPct += g_cfg.setpointStepPct;
         changed = true;
       }
       if (g_btnDown.pollRisingEdge())
       {
-        g_state.setpointDeg -= g_cfg.setpointStepDeg;
+        g_state.setpointPct -= g_cfg.setpointStepPct;
         changed = true;
       }
       if (changed)
       {
-        g_state.setpointDeg = clamp(g_state.setpointDeg, g_cfg.setpointMinDeg, g_cfg.setpointMaxDeg);
+        g_state.setpointPct = clamp(g_state.setpointPct, g_cfg.setpointMinPct, g_cfg.setpointMaxPct);
         refreshBounds();
       }
     }
@@ -91,11 +91,11 @@ namespace TaskAcquisition
     {
       g_lastSampleMs = now;
 
-      float temp = 0.0f;
-      if (g_dht.readTemperature(temp))
+      float h = 0.0f;
+      if (g_dht.readHumidity(h))
       {
-        g_state.temperatureCelsius = temp;
-        g_state.sensorValid        = true;
+        g_state.humidityPct = h;
+        g_state.sensorValid = true;
       }
       else
       {
@@ -109,12 +109,12 @@ namespace TaskAcquisition
 
       if (!g_state.sensorValid) return;
 
-      // Direct action (heating): relay ON when temperature falls below lower bound.
-      if (!g_state.relayRequestOn && g_state.temperatureCelsius < g_state.lowerBoundDeg)
+      // Inverse action (dehumidification): relay ON when humidity rises above upper bound.
+      if (!g_state.relayRequestOn && g_state.humidityPct > g_state.upperBoundPct)
       {
         g_state.relayRequestOn = true;
       }
-      else if (g_state.relayRequestOn && g_state.temperatureCelsius > g_state.upperBoundDeg)
+      else if (g_state.relayRequestOn && g_state.humidityPct < g_state.lowerBoundPct)
       {
         g_state.relayRequestOn = false;
       }

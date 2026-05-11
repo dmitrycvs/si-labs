@@ -38,28 +38,28 @@ namespace TaskLogger
 
     if (sensor.sensorValid)
     {
-      const int t10  = toTenths(sensor.temperatureCelsius);
-      const int lo10 = toTenths(sensor.lowerBoundDeg);
-      const int hi10 = toTenths(sensor.upperBoundDeg);
+      const int h10  = toTenths(sensor.humidityPct);
+      const int lo10 = toTenths(sensor.lowerBoundPct);
+      const int hi10 = toTenths(sensor.upperBoundPct);
 
       printf(
-          "[%lu] T=%d.%d C | SP=%d C | band=[%d.%d, %d.%d] C | relay=%s | sensor=OK\n",
+          "[%lu] H=%d.%d %% | SP=%d %% | band=[%d.%d, %d.%d] %% | relay=%s | sensor=OK\n",
           (unsigned long)g_seq++,
-          t10 / 10, absVal(t10 % 10),
-          sensor.setpointDeg,
+          h10 / 10, absVal(h10 % 10),
+          sensor.setpointPct,
           lo10 / 10, absVal(lo10 % 10),
           hi10 / 10, absVal(hi10 % 10),
           relayOn ? "ON" : "OFF");
     }
     else
     {
-      const int lo10 = toTenths(sensor.lowerBoundDeg);
-      const int hi10 = toTenths(sensor.upperBoundDeg);
+      const int lo10 = toTenths(sensor.lowerBoundPct);
+      const int hi10 = toTenths(sensor.upperBoundPct);
 
       printf(
-          "[%lu] T=n/a | SP=%d C | band=[%d.%d, %d.%d] C | relay=%s | sensor=ERR\n",
+          "[%lu] H=n/a | SP=%d %% | band=[%d.%d, %d.%d] %% | relay=%s | sensor=ERR\n",
           (unsigned long)g_seq++,
-          sensor.setpointDeg,
+          sensor.setpointPct,
           lo10 / 10, absVal(lo10 % 10),
           hi10 / 10, absVal(hi10 % 10),
           relayOn ? "ON" : "OFF");

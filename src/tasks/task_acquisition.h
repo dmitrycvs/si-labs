@@ -12,11 +12,11 @@ namespace TaskAcquisition
     bool     buttonsActiveLow;
     uint16_t buttonDebounceMs;
 
-    int      setpointInitDeg;
-    int      setpointMinDeg;
-    int      setpointMaxDeg;
-    int      setpointStepDeg;
-    float    hysteresisDeg;
+    int      setpointInitPct;
+    int      setpointMinPct;
+    int      setpointMaxPct;
+    int      setpointStepPct;
+    float    hysteresisPct;
 
     uint16_t buttonPeriodMs;
     uint16_t samplePeriodMs;
@@ -25,11 +25,11 @@ namespace TaskAcquisition
 
   struct State
   {
-    float temperatureCelsius;
+    float humidityPct;
     bool  sensorValid;
-    int   setpointDeg;
-    float lowerBoundDeg;
-    float upperBoundDeg;
+    int   setpointPct;
+    float lowerBoundPct;
+    float upperBoundPct;
     bool  relayRequestOn;
   };
 

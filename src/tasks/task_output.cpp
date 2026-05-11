@@ -1,11 +1,11 @@
 #include "task_output.h"
 
-#include "RelayOutput.h"
+#include "ServoActuator.h"
 
 namespace
 {
-  TaskOutput::Config g_cfg{12, 100};
-  RelayOutput        g_relay;
+  TaskOutput::Config g_cfg{7, 50};
+  ServoActuator      g_servo;
 
   bool g_commanded = false;
   bool g_applied   = false;
@@ -18,11 +18,11 @@ namespace TaskOutput
   void setup(const Config &cfg)
   {
     g_cfg = cfg;
-    g_relay.setup(RelayOutput::Config{.pin = g_cfg.relayPin, .activeHigh = true});
+    g_servo.setup(ServoActuator::Config{.pin = g_cfg.servoPin});
 
     g_commanded = false;
     g_applied   = false;
-    g_relay.set(false);
+    g_servo.disable();
 
     g_lastMs = millis();
   }
@@ -34,6 +34,8 @@ namespace TaskOutput
 
   void tick()
   {
+    g_servo.update();
+
     const uint32_t now = millis();
     if ((uint32_t)(now - g_lastMs) < g_cfg.periodMs) return;
     g_lastMs = now;
@@ -41,7 +43,8 @@ namespace TaskOutput
     if (g_applied != g_commanded)
     {
       g_applied = g_commanded;
-      g_relay.set(g_applied);
+      if (g_applied) g_servo.enable();
+      else           g_servo.disable();
     }
   }
 

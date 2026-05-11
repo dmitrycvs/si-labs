@@ -6,7 +6,7 @@ namespace TaskOutput
 {
   struct Config
   {
-    uint8_t  relayPin;
+    uint8_t  servoPin;
     uint16_t periodMs;
   };
 
