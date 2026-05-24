@@ -15,7 +15,7 @@ void DhtSensor::setup(const Config &cfg) {
     g_dht = nullptr;
   }
 
-  g_dht = new DHT(m_dataPin, DHT22);
+  g_dht = new DHT(m_dataPin, DHT11);
   g_dht->begin();
 }
 

@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include "Console.h"
 #include "config.h"
 #include "tasks/task_sensor.h"
 #include "tasks/task_driver.h"
@@ -7,7 +6,7 @@
 
 void setup()
 {
-  Console::init();
+  Serial.begin(9600);
 
   TaskSensor::setup(Config::SENSOR_CFG);
   TaskDriver::setup(Config::DRIVER_CFG);
